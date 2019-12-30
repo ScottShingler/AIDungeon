@@ -1,8 +1,34 @@
 #!/usr/bin/env bash
 set -e
+
+AUTO_CONFIRM=false
+PARAMS=""
+while (( "$#" )); do
+  case "$1" in
+    -y)
+      AUTO_CONFIRM=true
+      shift
+      ;;
+    --) # end argument parsing
+      shift
+      break
+      ;;
+    -*|--*=) # unsupported flags
+      echo "Error: Unsupported flag $1" >&2
+      exit 1
+      ;;
+    *) # preserve positional arguments
+      PARAMS="$PARAMS $1"
+      shift
+      ;;
+  esac
+done
+
+# set positional arguments in their proper place
+eval set -- "$PARAMS"
+
 cd "$(dirname "${0}")"
 BASE_DIR="$(pwd)"
-PACKAGES=(aria2 git unzip wget)
 # Tensorflow states 3.4.0 as the minimum version.
 # This is also the minimum version with venv support.
 # 3.8.0 and up only includes tensorflow 2.0 and not 1.15
@@ -25,11 +51,18 @@ version_check () {
 	fi
 }
 
+# Expects a single argument which represents the auto-confirm flag to pass to the package manager
+auto_confirm() {
+	if $AUTO_CONFIRM; then
+		printf "%s" $1
+	fi
+}
+
 pip_install () {
 	if [ ! -d "./venv" ]; then
 		# Some distros have venv built into python so this isn't always needed.
 		if is_command 'apt-get'; then
-			apt-get install python3-venv
+			apt-get install $(auto_confirm -y) python3-venv
 		fi
 		python3 -m venv ./venv
 	fi
@@ -47,18 +80,18 @@ system_package_install() {
 	if (( $EUID != 0 )); then
 		SUDO='sudo'
 	fi
-	
+
 	PACKAGES=(aria2 git unzip wget)
 	if is_command 'apt-get'; then
-		$SUDO apt-get install ${PACKAGES[@]}
+		$SUDO apt-get install $(auto_confirm -y) ${PACKAGES[@]}
 	elif is_command 'brew'; then
 		brew install ${PACKAGES[@]}
 	elif is_command 'yum'; then
-		$SUDO yum install ${PACKAGES[@]}
+		$SUDO yum install $(auto_confirm -y) ${PACKAGES[@]}
 	elif is_command 'dnf'; then
-		$SUDO dnf install ${PACKAGES[@]}
+		$SUDO dnf install $(auto_confirm -y) ${PACKAGES[@]}
 	elif is_command 'pacman'; then
-		$SUDO pacman -S ${PACKAGES[@]}
+		$SUDO pacman -S $(auto_confirm --noconfirm) ${PACKAGES[@]}
 	elif is_command 'apk'; then
 		$SUDO apk --update add ${PACKAGES[@]}
 	else
